@@ -1,0 +1,144 @@
+name: Pages
+
+# Publish the WordCraft wasm build to GitHub Pages as an offline-capable PWA.
+#
+# The publishing repo carries no Rust source (see README): every run rebuilds the app from the
+# latest upstream storytold/wordcraft main, layers the PWA overlay (site/) over the build output,
+# and deploys. The weekly cron keeps the published build current with upstream; pushes to this
+# repo and manual runs redeploy the overlay or refresh the build on demand.
+#
+# Pages must be enabled with build type "GitHub Actions" (done once via the API/Settings).
+
+on:
+  schedule:
+    # Weekly, Monday 04:00 UTC — off-peak, and a fixed time keeps runs easy to find.
+    - cron: "0 4 * * 1"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time; a newer run supersedes an older queued one, but a running deploy is
+# allowed to finish (Pages deployments are not resumable mid-flight).
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
+jobs:
+  build:
+    name: Build wasm site
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out this publishing repo (overlay + workflow)
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Check out upstream wordcraft (latest main)
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: storytold/wordcraft
+          ref: main
+          path: wordcraft
+          persist-credentials: false
+
+      - name: Record the upstream commit this build comes from
+        id: upstream
+        run: echo "sha=$(git -C wordcraft rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out craft-i18n (interface translations)
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: storytold/craft-i18n
+          ref: main
+          path: craft-i18n
+          persist-credentials: false
+
+      - name: Move craft-i18n to the upstream pin
+        run: |
+          # Translations are pinned by craft-i18n.rev in the upstream checkout; build against
+          # exactly that SHA so the interface catalogs match what the pinned source expects.
+          # CRAFT_I18N_REQUIRED=1 makes a missing checkout an error, not an English-only build.
+          rev=$(tr -d '[:space:]' < wordcraft/craft-i18n.rev)
+          if ! [[ "$rev" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error file=craft-i18n.rev::expected a 40-character SHA, found '$rev'"
+            exit 1
+          fi
+          git -C craft-i18n fetch --depth=1 origin "$rev"
+          git -C craft-i18n checkout --detach "$rev"
+          echo "CRAFT_I18N_DIR=$GITHUB_WORKSPACE/craft-i18n" >> "$GITHUB_ENV"
+          echo "CRAFT_I18N_REQUIRED=1" >> "$GITHUB_ENV"
+
+      - name: Check out craft-fonts (interface faces embedded in the wasm)
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: storytold/craft-fonts
+          ref: b076417b5880bd4154bd22f00695b1d28c6bea83
+          path: craft-fonts
+          persist-credentials: false
+
+      - name: Install Rust (stable, wasm32 target)
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+
+      - name: Install Trunk
+        uses: storytold/craft-common-actions/actions/install-trunk@main
+        with:
+          trunk-version: "0.21.14"
+
+      - name: Cache cargo (workspace + registry, keyed by Cargo.lock)
+        uses: actions/cache@a7833574556fa59680c1b7cb190c1735db73ebf0 # v5.0.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            wordcraft/target
+          key: wasm-site-v1-${{ hashFiles('wordcraft/Cargo.lock') }}
+          restore-keys: wasm-site-v1-
+
+      - name: Build upstream web app with Trunk
+        env:
+          CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+          CRAFT_FONTS_REQUIRED: "1"
+          # The build stamp (shown in the app's About window) is the upstream commit this build
+          # came from, not this publishing repo's commit.
+          WORDCRAFT_BUILD_SHA: ${{ steps.upstream.outputs.sha }}
+        run: |
+          cd wordcraft/apps/wordcraft-web
+          trunk build --release
+
+      - name: Assemble the site (build output + PWA overlay)
+        env:
+          WORDCRAFT_DIR: ${{ github.workspace }}/wordcraft
+          GITHUB_PAGES_URL: https://sloth-os.github.io/wordcraft/
+        run: bash scripts/build-site.sh
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: https://sloth-os.github.io/wordcraft/
+    steps:
+      - name: Deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

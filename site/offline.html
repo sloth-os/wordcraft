@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WordCraft — offline</title>
+  <link rel="icon" href="icons/icon-192.png">
+  <style>
+    html, body { margin: 0; height: 100%; background: #e6e6e6; color: #333;
+      font: 15px/1.6 system-ui, sans-serif; display: flex; align-items: center; justify-content: center; }
+    main { max-width: 34em; padding: 2em; text-align: center; }
+    h1 { font-size: 1.3em; margin: 0 0 .6em; }
+    img { width: 96px; height: 96px; margin-bottom: 1em; }
+    code { background: #ddd; padding: 0 .3em; border-radius: 4px; }
+ </style>
+</head>
+<body>
+  <main>
+    <img src="icons/icon-192.png" alt="">
+    <h1>WordCraft isn’t cached yet</h1>
+    <p>
+      This is the offline fallback page. WordCraft itself runs offline once it has been loaded
+      online at least once — the service worker then keeps the app (the ~13 MB WebAssembly build)
+      in the browser cache.
+    </p>
+    <p>
+      You’re seeing this page because the app build hasn’t been visited while online, or the
+      service worker was removed (browser storage cleared). Connect once, load the app, and it
+      will work offline afterwards.
+    </p>
+    <p><a href="./">Try again</a></p>
+  </main>
+</body>
+</html>
