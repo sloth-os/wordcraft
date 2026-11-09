@@ -35,33 +35,14 @@ cp "$SITE_DIR/manifest.webmanifest" "$OUT_DIR/"
 cp "$SITE_DIR/sw.js" "$OUT_DIR/"
 cp "$SITE_DIR/offline.html" "$OUT_DIR/"
 
-# Icons: from upstream's hicolor set (same app icon the desktop app uses; MIT OR Apache-2.0) at
-# the sizes it ships, with 192 and the maskable variants (artwork inside the safe zone on a
-# solid tile) generated from the 512 original — generated here so this repo ships no binary blobs.
-python3 - "$WORDCRAFT_DIR/assets/app-icon/hicolor/512x512/apps/ai.storyteller.wordcraft.png" \
-  "$WORDCRAFT_DIR/assets/app-icon/hicolor/256x256/apps/ai.storyteller.wordcraft.png" "$OUT_DIR/icons" <<'PY'
-import sys
-from PIL import Image
-
-src512_path, src256_path, out_dir = sys.argv[1:4]
-src512 = Image.open(src512_path).convert("RGBA")
-src256 = Image.open(src256_path).convert("RGBA")
-
-# "any" icons: as-is at the sizes upstream ships.
-src512.save(f"{out_dir}/icon-512.png", "PNG")
-src256.save(f"{out_dir}/icon-256.png", "PNG")
-src512.resize((192, 192), Image.LANCZOS).save(f"{out_dir}/icon-192.png", "PNG")
-
-# Maskable icons: the launcher mask crops to a shape (circle, squircle…), so the artwork must
-# sit inside the central ~80% safe zone on a background of the app tile's blue.
-for px in (192, 512):
-    canvas = Image.new("RGBA", (px, px), (59, 91, 219, 255))
-    icon = src512.resize((int(px * 0.8), int(px * 0.8)), Image.LANCZOS)
-    canvas.paste(icon, ((px - icon.width) // 2, (px - icon.height) // 2), icon)
-    canvas.save(f"{out_dir}/icon-maskable-{px}.png", "PNG")
-PY
-cp "$WORDCRAFT_DIR/assets/app-icon/wordcraft.svg" "$OUT_DIR/icons/icon.svg" 2>/dev/null \
-  || cp "$WORDCRAFT_DIR/assets/app-icon/hicolor/scalable/apps/ai.storyteller.wordcraft.svg" "$OUT_DIR/icons/icon.svg"
+# Icons: committed in this repo at site/icons/ — derived once from upstream's hicolor app icon
+# (the placeholder icon is MIT OR Apache-2.0): 192/256/512 "any" sizes plus maskable variants
+# with the artwork inside the central ~80% safe zone on a solid tile of the app tile's blue.
+# Copied as-is so the runner needs no image toolchain; the .gitattributes keeps them out of
+# line-ending/normalization trouble.
+cp "$SITE_DIR"/icons/icon-192.png "$SITE_DIR"/icons/icon-256.png "$SITE_DIR"/icons/icon-512.png \
+ "$SITE_DIR"/icons/icon-maskable-192.png "$SITE_DIR"/icons/icon-maskable-512.png "$OUT_DIR/icons/"
+cp "$SITE_DIR"/icons/icon.svg "$OUT_DIR/icons/"
 
 # --- 3. Deployment marker -------------------------------------------------------------------
 # version.json: the build's identity, uncached by the service worker. commit is the upstream SHA

@@ -1,0 +1,4 @@
+# PNG icons are committed build inputs (derived from upstream's MIT OR Apache-2.0 placeholder
+# app icon); keep git from ever mangling them.
+*.png binary
+*.wasm binary
