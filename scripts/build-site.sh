@@ -3,7 +3,7 @@
 #
 # The workflow calls this from the publishing repo checkout, with the upstream wordcraft clone in
 # $WORDCRAFT_DIR (its apps/wordcraft-web builds with Trunk into dist/web). After the build, the
-# site overlay (manifest, service worker, icons, offline page, version marker) is layered on top.
+# site overlay (manifest, service worker, icons, offline page, deployment id) is layered on top.
 #
 # Environment:
 #   WORDCRAFT_DIR   upstream wordcraft checkout (required)

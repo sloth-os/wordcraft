@@ -25,7 +25,7 @@ Every run — weekly on schedule, on every push, or manual `workflow_dispatch` �
 2. Builds `apps/wordcraft-web` with Trunk (`trunk build --release`, `wasm-opt -z`), exactly as
    upstream's own release pipeline does.
 3. Layers `site/` over the output: a web app manifest, PWA icons, a service worker, an offline
-   notice, and a `version.json` deployment marker.
+   notice, and a `version.json` deployment id.
 4. Publishes the result to GitHub Pages.
 
 Because every build is from upstream's latest `main`, the published app tracks upstream
@@ -38,9 +38,10 @@ development without this repo carrying a fork.
 - `site/sw.js` is a service worker: precaches the shell (`index.html`, manifest, icons,
   `version.json`), serves the content-hashed `.wasm`/`.js` cache-first, `index.html` network-first
   (so a new weekly build is picked up on the next visit, offline falls back to the cached copy).
-- `version.json` carries the deployment id (upstream commit + build time); a new deployment means
-  a new service-worker byte content only when its own version changes — old caches are dropped on
-  activation. The `wordcraft:skip-waiting` postMessage lets a waiting worker take over early.
+- `version.json` carries the deployment id (upstream commit + build time); it is never cached,
+  so `https://sloth-os.github.io/wordcraft/version.json` always shows the live build. A new
+  deployment updates the worker because browsers re-fetch `sw.js` on navigation and it calls
+  `skipWaiting`/`clients.claim`.
 - User-added fonts and preferences live in IndexedDB/`localStorage`, which the app manages itself.
 
 ## Notes
