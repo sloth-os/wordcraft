@@ -24,7 +24,10 @@
 
 (function () {
   if (!('launchQueue' in window)) return;
-  if (!('files' in (window.LaunchParams && LaunchParams.prototype))) return;
+  // Old Chromium builds expose launchQueue but not the LaunchParams interface — without
+  // files-bearing launch params there is nothing to consume, so bail out without throwing
+  // ('files' in undefined is a TypeError, not false).
+  if (!window.LaunchParams || !('files' in LaunchParams.prototype)) return;
 
   var canvasId = 'wordcraft_canvas';
   var loadingId = 'wordcraft_loading';
