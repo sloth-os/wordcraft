@@ -8,6 +8,22 @@
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "any",
+  "launch_handler": {
+    "client_mode": ["focus-existing", "auto"]
+  },
+  "file_handlers": [
+    {
+      "action": "./",
+      "accept": {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx", ".docm", ".dotx", ".dotm"],
+        "application/vnd.oasis.opendocument.text": [".odt"],
+        "application/vnd.oasis.opendocument.text-template": [".ott"],
+        "application/vnd.oasis.opendocument.text-flat-xml": [".fodt"],
+        "application/rtf": [".rtf"],
+        "text/markdown": [".md"]
+      }
+    }
+  ],
   "background_color": "#e6e6e6",
   "theme_color": "#3b5bdb",
   "categories": ["productivity", "utilities"],

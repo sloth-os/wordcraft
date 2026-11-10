@@ -35,6 +35,13 @@ cp "$SITE_DIR/manifest.webmanifest" "$OUT_DIR/"
 cp "$SITE_DIR/sw.js" "$OUT_DIR/"
 cp "$SITE_DIR/offline.html" "$OUT_DIR/"
 
+# The file-handling consumer script, under a content hash: the service worker serves .js
+# cache-first (immutable), so an unhashed name would pin a stale consumer forever. The hashed
+# name is what index.html references (step 4), and warmAppAssets() prunes the previous build's
+# copy on the next activation, exactly as it does for the app's hashed js/wasm.
+LQ_HASH="$(sha256sum "$SITE_DIR/launch-queue.js" | cut -c1-12)"
+cp "$SITE_DIR/launch-queue.js" "$OUT_DIR/launch-queue-$LQ_HASH.js"
+
 # Icons: committed in this repo at site/icons/ — derived once from upstream's hicolor app icon
 # (the placeholder icon is MIT OR Apache-2.0): 192/256/512 "any" sizes plus maskable variants
 # with the artwork inside the central ~80% safe zone on a solid tile of the app tile's blue.
@@ -55,12 +62,14 @@ printf '{\n  "commit": "%s",\n  "builtAt": "%s",\n  "upstreamDate": "%s",\n  "ve
 
 # --- 4. Wire the overlay into index.html ------------------------------------------------------
 # index.html comes from the upstream build; it knows nothing of the PWA. Add the manifest link,
-# theme color and the service worker registration (a tiny inline module, kept inline so the
-# registration is on the critical path without another request).
-python3 - "$OUT_DIR/index.html" <<'PY'
+# theme color, the file-handling consumer script and the service worker registration (a tiny
+# inline module, kept inline so the registration is on the critical path without another
+# request).
+python3 - "$OUT_DIR/index.html" "$LQ_HASH" <<'PY'
 import sys
 
 path = sys.argv[1]
+lq_hash = sys.argv[2]
 html = open(path, encoding="utf-8").read()
 
 head_add = (
@@ -68,6 +77,7 @@ head_add = (
     '  <meta name="theme-color" content="#3b5bdb">\n'
     '  <link rel="apple-touch-icon" href="icons/icon-192.png">\n'
  '  <meta name="description" content="WordCraft: open-source word processor in the browser">\n'
+    f'  <script src="launch-queue-{lq_hash}.js" defer></script>\n'
 )
 if 'rel="manifest"' not in html:
     html = html.replace("</head>", head_add + "</head>", 1)
@@ -91,15 +101,17 @@ else:
     html += sw_register
 
 open(path, "w", encoding="utf-8").write(html)
-print("index.html: manifest link and service worker registration added")
+print("index.html: manifest link, file-handling consumer and service worker registration added")
 PY
 
 # --- 5. Verify the result --------------------------------------------------------------------
-python3 - "$OUT_DIR" <<'PY'
+python3 - "$OUT_DIR" "$LQ_HASH" <<'PY'
 import json, sys, pathlib
 
 out = pathlib.Path(sys.argv[1])
+lq_hash = sys.argv[2]
 must = ["index.html", "manifest.webmanifest", "sw.js", "offline.html", "version.json",
+        f"launch-queue-{lq_hash}.js",
         "icons/icon-192.png", "icons/icon-256.png", "icons/icon-512.png",
         "icons/icon-maskable-192.png", "icons/icon-maskable-512.png", "icons/icon.svg"]
 missing = [f for f in must if not (out / f).is_file()]
@@ -109,9 +121,18 @@ manifest = json.loads((out / "manifest.webmanifest").read_text())
 html = (out / "index.html").read_text()
 assert 'rel="manifest"' in html, "index.html lost its manifest link"
 assert "serviceWorker" in html or "<script" not in html, "no service worker registration"
+assert f"launch-queue-{lq_hash}.js" in html, "index.html lost its launchQueue consumer"
 wasm = list(out.glob("*.wasm"))
 assert wasm, "no wasm in the output — the trunk build output was not copied"
 assert len(manifest["icons"]) >= 4, "manifest icons missing"
+# File handling: every handler action must be relative (within the /<repo>/ scope on Pages — a
+# root-absolute action resolves outside it and Chromium silently drops the handler) and every
+# accept value a list of extensions (the spec skips non-lists).
+for handler in manifest.get("file_handlers", []):
+    assert not handler["action"].startswith("/"), f"file_handlers action must be relative: {handler['action']}"
+    for mime, exts in handler["accept"].items():
+        assert isinstance(exts, list) and all(e.startswith(".") for e in exts), \
+            f"accept {mime} must be a list of .extensions: {exts}"
 print(f"verify: {len(must)} core files, {len(wasm)} wasm, manifest ok")
 PY
 

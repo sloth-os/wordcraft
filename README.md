@@ -42,6 +42,16 @@ development without this repo carrying a fork.
   so `https://sloth-os.github.io/wordcraft/version.json` always shows the live build. A new
   deployment updates the worker because browsers re-fetch `sw.js` on navigation and it calls
   `skipWaiting`/`clients.claim`.
+- `site/launch-queue.js` adds OS-level file handling: once the PWA is installed on desktop
+  Chromium, "open with › WordCraft" (or double-clicking a registered document) launches the
+  installed app and hands the file to it. The manifest's `file_handlers` action is `./` — the
+  app page itself — and the consumer delivers the launched file as a synthetic drop on the
+  app canvas (the same path as drag-and-drop), falling back to the app's `window.wordcraft`
+  command API if the drop does not land. Cold launches wait for the app to finish booting
+  (the loading indicator's removal — after eframe installs its canvas listeners — is the
+  ready signal), and re-launches while the app is already open deliver each new file the same
+  way (`launch_handler: focus-existing`). The script is served under a content hash like the
+  app's own assets, so updates are not pinned by the service worker's cache-first `.js` rule.
 - User-added fonts and preferences live in IndexedDB/`localStorage`, which the app manages itself.
 
 ## Notes
